@@ -1,3 +1,4 @@
+import asyncio
 from logging.config import fileConfig
 
 from sqlalchemy import pool
@@ -6,7 +7,8 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 from app.core.config import get_settings
-from app.db.all_models import Base
+from app.db import all_models
+from app.db.base import Base
 
 config = context.config
 
@@ -20,6 +22,7 @@ config.set_main_option(
     settings.database_url.replace("%", "%%"),
 )
 
+_ = all_models
 target_metadata = Base.metadata
 
 
@@ -61,8 +64,6 @@ async def run_async_migrations() -> None:
 
 
 def run_migrations_online() -> None:
-    import asyncio
-
     asyncio.run(run_async_migrations())
 
 
