@@ -41,14 +41,15 @@ services:
 
     volumes:
       - ./backend/app:/app/app
-      # - ./backend/alembic:/app/alembic
+      - ./backend/alembic:/app/alembic
       - ./backend/scripts:/app/scripts
 
     command: >
+      sh -c "alembic upgrade head &&
       uvicorn app.main:app
       --host 0.0.0.0
       --port 8000
-      --reload
+      --reload"
 
     depends_on:
       db:
