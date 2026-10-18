@@ -1,0 +1,86 @@
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: email_assistant_db
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+      POSTGRES_DB: ${DB_NAME:-email_assistant}
+
+    ports:
+      - "127.0.0.1:5434:5432"
+
+    volumes:
+      - email_assistant_pgdata:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+    container_name: email_assistant_api
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+
+    ports:
+      - "127.0.0.1:8002:8000"
+
+    volumes:
+      - ./backend/app:/app/app
+      # - ./backend/alembic:/app/alembic
+      - ./backend/scripts:/app/scripts
+
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+
+    container_name: email_assistant_frontend
+    restart: unless-stopped
+
+    ports:
+      - "127.0.0.1:8081:80"
+
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  email_assistant_pgdata:
