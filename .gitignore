@@ -6,6 +6,7 @@
 # Python cache
 __pycache__/
 *.py[cod]
+.mypy_cache/
 
 # Python virtual environments
 .venv/
@@ -16,6 +17,7 @@ build/
 dist/
 wheels/
 *.egg-info/
+
 
 # Python testing and linting
 .pytest_cache/

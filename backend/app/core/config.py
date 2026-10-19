@@ -1,8 +1,12 @@
 from functools import lru_cache
+from pathlib import Path
+from typing import ClassVar
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL
+
+ROOT_DIR = Path(__file__).resolve().parents[3]
 
 
 class Settings(BaseSettings):
@@ -15,11 +19,24 @@ class Settings(BaseSettings):
     DB_HOST: str = "localhost"
     DB_PORT: int = 5434
 
-    model_config = SettingsConfigDict( # pyright: ignore[reportUnannotatedClassAttribute]
-        env_file="../.env",
-        env_file_encoding="utf-8",
-        extra="ignore",
+    SECRET_KEY: SecretStr
+
+    TOKEN_ENCRYPTION_KEY: SecretStr
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: SecretStr = SecretStr("")
+
+    GOOGLE_AUTH_REDIRECT_URI: str = "http://localhost:8002/api/v1/auth/google/callback"
+    GOOGLE_GMAIL_REDIRECT_URI: str = (
+        "http://localhost:8002/api/v1/accounts/google/callback"
     )
+
+    FRONTEND_URL: str = "http://localhost:8081"
+
+    SESSION_COOKIE_NAME: str = "email_assistant_session"
+    SESSION_EXPIRE_MINUTES: int = 60
+
+    COOKIE_SECURE: bool = False
+    COOKIE_SAMESITE: str = "lax"
 
     CORS_ORIGINS: list[str] = [
         "http://localhost:5173",
@@ -27,6 +44,12 @@ class Settings(BaseSettings):
         "http://localhost:8081",
         "http://127.0.0.1:8081",
     ]
+
+    model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(
+        env_file=ROOT_DIR / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     @property
     def database_url(self) -> str:
@@ -42,4 +65,4 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    return Settings()  # pyright: ignore[reportCallIssue]

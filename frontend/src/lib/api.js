@@ -1,9 +1,10 @@
 const API_BASE_URL = (
-  import.meta.env.VITE_API_URL || "/api"
+  import.meta.env.VITE_API_URL || "/api/v1"
 ).replace(/\/+$/, "");
 
 export async function apiGet(path) {
   const normalizedPath = path.replace(/^\/+/, "");
+
   const response = await fetch(
     `${API_BASE_URL}/${normalizedPath}`
   );

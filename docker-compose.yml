@@ -16,10 +16,15 @@ services:
       - email_assistant_pgdata:/var/lib/postgresql/data
 
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"
+        ]
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 10s
 
   api:
     build:
@@ -42,31 +47,24 @@ services:
     volumes:
       - ./backend/app:/app/app
       - ./backend/alembic:/app/alembic
-      - ./backend/scripts:/app/scripts
 
-    command: >
-      sh -c "alembic upgrade head &&
-      uvicorn app.main:app
-      --host 0.0.0.0
-      --port 8000
-      --reload"
+    command:
+      - sh
+      - -c
+      - |
+        alembic upgrade head &&
+        exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
     depends_on:
       db:
         condition: service_healthy
 
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"
-        ]
+      test: ["CMD-SHELL", "kill -0 1"]
       interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 20s
+      retries: 3
+      start_period: 30s
 
   frontend:
     build:
