@@ -82,3 +82,24 @@ class ConnectedAccount(TimeStampMixin, Base):
         DateTime(timezone=True),
         nullable=True,
     )
+
+
+class OAuthState(TimeStampMixin, Base):
+    __tablename__: str = "oauth_states"
+
+    state: Mapped[str] = mapped_column(
+        String(128),
+        primary_key=True,
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )

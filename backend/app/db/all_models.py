@@ -1,4 +1,4 @@
-from app.modules.accounts.models import ConnectedAccount
+from app.modules.accounts.models import ConnectedAccount, OAuthState
 from app.modules.auth.models import User
 
-__all__ = ["ConnectedAccount", "User"]
+__all__ = ["ConnectedAccount", "OAuthState", "User"]

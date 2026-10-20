@@ -25,12 +25,9 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: SecretStr = SecretStr("")
 
-    GOOGLE_AUTH_REDIRECT_URI: str = "http://localhost:8002/api/v1/auth/google/callback"
-    GOOGLE_GMAIL_REDIRECT_URI: str = (
-        "http://localhost:8002/api/v1/accounts/google/callback"
-    )
-
-    FRONTEND_URL: str = "http://localhost:8081"
+    GOOGLE_AUTH_REDIRECT_URI: str
+    GOOGLE_GMAIL_REDIRECT_URI: str
+    FRONTEND_URL: str
 
     SESSION_COOKIE_NAME: str = "email_assistant_session"
     SESSION_EXPIRE_MINUTES: int = 60
