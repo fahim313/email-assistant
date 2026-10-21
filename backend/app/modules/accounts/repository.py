@@ -34,6 +34,18 @@ async def get_by_id(
     return result.scalar_one_or_none()
 
 
+async def list_by_user(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+) -> list[ConnectedAccount]:
+    result = await session.execute(
+        select(ConnectedAccount)
+        .where(ConnectedAccount.user_id == user_id)
+        .order_by(ConnectedAccount.created_at)
+    )
+    return list(result.scalars().all())
+
+
 async def save(
     session: AsyncSession,
     account: ConnectedAccount,

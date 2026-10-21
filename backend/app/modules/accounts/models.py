@@ -5,6 +5,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     UniqueConstraint,
 )
@@ -72,6 +73,7 @@ class ConnectedAccount(TimeStampMixin, Base):
         nullable=True,
     )
 
+    # pending | syncing | synced | failed
     sync_status: Mapped[str] = mapped_column(
         String(30),
         default="pending",
@@ -80,6 +82,31 @@ class ConnectedAccount(TimeStampMixin, Base):
 
     last_synced_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
+        nullable=True,
+    )
+
+    # Gmail historyId at the start of the last sync (for incremental sync later)
+    history_id: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
+    sync_total: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default="0",
+        nullable=False,
+    )
+
+    sync_done: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default="0",
+        nullable=False,
+    )
+
+    sync_error: Mapped[str | None] = mapped_column(
+        String(500),
         nullable=True,
     )
 
