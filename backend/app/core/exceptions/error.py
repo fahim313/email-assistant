@@ -28,5 +28,17 @@ class ForbiddenError(AppError):
     """Raised when access is forbidden."""
 
 
+class RateLimitError(AppError):
+    """Raised when a client exceeds a rate limit."""
+
+    def __init__(self, retry_after: int) -> None:
+        self.retry_after: int = retry_after
+        super().__init__("Too many requests.")
+
+
+class ReconnectRequiredError(AppError):
+    """Raised when a connected Gmail account must be re-authorized."""
+
+
 class LLMUnavailableError(AppError):
     """Raised when the LLM provider is unavailable."""

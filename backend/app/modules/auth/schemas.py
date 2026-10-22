@@ -14,6 +14,24 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=128)
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: str = Field(min_length=1, max_length=512)
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: str = Field(min_length=1, max_length=512)
+
+
+class GoogleIdTokenRequest(BaseModel):
+    """For frontends that use Google Identity Services directly."""
+
+    id_token: str = Field(min_length=1, max_length=4096)
+
+
+class GoogleLoginUrlResponse(BaseModel):
+    authorization_url: str
+
+
 class UserResponse(BaseModel):
     id: str
     name: str
@@ -25,5 +43,7 @@ class UserResponse(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
+    expires_in: int  # access token lifetime, seconds
     user: UserResponse

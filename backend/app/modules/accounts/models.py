@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     ForeignKey,
     Index,
@@ -80,6 +81,21 @@ class ConnectedAccount(TimeStampMixin, Base):
         nullable=False,
     )
 
+    # Current sync step key (connecting | inbox | sent | threads | done)
+    sync_step: Mapped[str | None] = mapped_column(
+        String(30),
+        nullable=True,
+    )
+
+    # Set when Google rejects our refresh token (revoked / expired / removed
+    # from the user's Google account). Cleared when the user reconnects.
+    needs_reauth: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="false",
+        nullable=False,
+    )
+
     last_synced_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
@@ -109,6 +125,15 @@ class ConnectedAccount(TimeStampMixin, Base):
         String(500),
         nullable=True,
     )
+
+    @property
+    def status(self) -> str:
+        """UI status: connected | syncing | disconnected."""
+        if self.needs_reauth:
+            return "disconnected"
+        if self.sync_status == "syncing":
+            return "syncing"
+        return "connected"
 
 
 class OAuthState(TimeStampMixin, Base):

@@ -1,19 +1,37 @@
+import os
 from collections.abc import Mapping
 from typing import Any, cast
 
+import httpx
 from google.auth.transport import requests
 from google.oauth2 import id_token
 from google_auth_oauthlib.flow import Flow
 
 from app.core.config import get_settings
 
-GOOGLE_SCOPES = [
-    "openid",
-    "https://www.googleapis.com/auth/userinfo.email",
+# The user can untick Gmail permissions on Google's consent screen
+# (granular consent). oauthlib would then raise a bare Warning from
+# fetch_token(); relax that so we can check the granted scopes ourselves
+# and show a proper message.
+os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
+
+GMAIL_SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.send",
     "https://www.googleapis.com/auth/gmail.compose",
 ]
+
+GOOGLE_SCOPES = [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    *GMAIL_SCOPES,
+]
+
+REVOKE_URI = "https://oauth2.googleapis.com/revoke"
+
+
+def missing_gmail_scopes(granted: list[str]) -> list[str]:
+    return [scope for scope in GMAIL_SCOPES if scope not in set(granted)]
 
 
 def create_google_flow(state: str | None = None) -> Flow:
@@ -45,7 +63,8 @@ def get_google_authorization_url(state: str) -> str:
 
     authorization_url, _ = flow.authorization_url(
         access_type="offline",
-        # select_account lets the user pick a different Gmail each time
+        # select_account lets the user pick a different Gmail each time;
+        # consent makes Google return a refresh token every time.
         prompt="select_account consent",
     )
 
@@ -86,3 +105,13 @@ def get_google_user_info(flow: Flow) -> dict[str, str]:
         "sub": subject,
         "email": email,
     }
+
+
+async def revoke_google_token(token: str) -> bool:
+    """Best-effort revoke at Google so a disconnect really cuts access."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.post(REVOKE_URI, data={"token": token})
+        return response.status_code == 200
+    except httpx.HTTPError:
+        return False

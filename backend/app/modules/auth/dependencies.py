@@ -41,3 +41,6 @@ async def get_current_user(
         raise AuthenticationError("Invalid or inactive account.")
 
     return user
+
+
+CurrentUser = Annotated[User, Depends(get_current_user)]

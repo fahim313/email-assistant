@@ -8,6 +8,8 @@ from app.core.exceptions.error import (
     ForbiddenError,
     LLMUnavailableError,
     NotFoundError,
+    RateLimitError,
+    ReconnectRequiredError,
 )
 
 
@@ -51,6 +53,31 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=403,
             content={"detail": str(exc) or "Access forbidden."},
+        )
+
+    @app.exception_handler(RateLimitError)
+    async def rate_limit_handler(
+        _request: Request,
+        exc: RateLimitError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Too many requests. Please slow down."},
+            headers={"Retry-After": str(exc.retry_after)},
+        )
+
+    @app.exception_handler(ReconnectRequiredError)
+    async def reconnect_required_handler(
+        _request: Request,
+        exc: ReconnectRequiredError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail": str(exc)
+                or "This Gmail account must be reconnected.",
+                "code": "reconnect_required",
+            },
         )
 
     @app.exception_handler(LLMUnavailableError)
