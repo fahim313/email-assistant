@@ -2,6 +2,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, or_, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.accounts.models import ConnectedAccount
@@ -81,7 +82,7 @@ async def purge_old_runs(session: AsyncSession, keep_days: int = 30) -> int:
         )
     )
     await session.commit()
-    return result.rowcount or 0  # pyright: ignore[reportAttributeAccessIssue]
+    return result.rowcount if isinstance(result, CursorResult) else 0  
 
 
 async def finish_run(

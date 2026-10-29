@@ -2,6 +2,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,8 +38,6 @@ def _user_response(user: User) -> UserResponse:
         is_active=user.is_active,
     )
 
-
-# --- Sessions (access + refresh token pair) -------------------------------
 
 
 async def _issue_session(
@@ -156,7 +155,7 @@ async def purge_expired_tokens(session: AsyncSession) -> int:
         delete(RefreshToken).where(RefreshToken.expires_at < cutoff)
     )
     await session.commit()
-    return result.rowcount or 0  # pyright: ignore[reportAttributeAccessIssue]
+    return result.rowcount if isinstance(result, CursorResult) else 0
 
 
 async def register_user(

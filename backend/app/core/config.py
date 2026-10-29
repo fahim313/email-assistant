@@ -9,6 +9,11 @@ from sqlalchemy.engine import URL
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
 
+_KEY_SNIPPET = (
+    "from cryptography.fernet import Fernet; "
+    "print(Fernet.generate_key().decode())"
+)
+
 
 class Settings(BaseSettings):
     APP_NAME: str
@@ -46,6 +51,23 @@ class Settings(BaseSettings):
     SYNC_BATCH_SIZE: int
     SYNC_STALE_MINUTES: int
     SYNC_INTERVAL_MINUTES: int
+    LLM_PROVIDER: str
+    LLM_MODEL: str
+
+    LLM_FALLBACK_PROVIDER: str | None = None
+    LLM_FALLBACK_MODEL: str | None = None
+
+    LLM_TIMEOUT_SECONDS: int = 60
+
+    GROQ_API_KEY: SecretStr | None = None
+
+    ANALYSIS_INTERVAL_MINUTES: int = 2
+    ANALYSIS_BATCH_LIMIT: int = 30
+    ANALYSIS_CONCURRENCY: int = 1
+    ANALYSIS_PAUSE_SECONDS: float = 5.0
+    ANALYZE_RATE_PER_MINUTE: int = 6
+    APP_TIMEZONE: str = "Asia/Dhaka"
+    ENABLE_DEBUG_ENDPOINTS: bool = False
 
     CORS_ORIGINS: list[str]
 
@@ -59,13 +81,16 @@ class Settings(BaseSettings):
     @classmethod
     def validate_fernet_key(cls, value: SecretStr) -> SecretStr:
         try:
-            Fernet(value.get_secret_value().encode())
+            _ = Fernet(value.get_secret_value().encode())
         except (ValueError, TypeError):
             raise ValueError(
-                "TOKEN_ENCRYPTION_KEY must be a valid Fernet key. "
-                "Generate one with: "
-                "python -c \"from cryptography.fernet import Fernet; "
-                "print(Fernet.generate_key().decode())\""
+                " ".join(
+                    (
+                        "TOKEN_ENCRYPTION_KEY must be a valid Fernet key.",
+                        "Generate one with:",
+                        f'python -c "{_KEY_SNIPPET}"',
+                    )
+                )
             ) from None
 
         return value

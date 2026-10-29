@@ -4,7 +4,7 @@ import secrets
 from typing import Annotated
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi import APIRouter, Query, Request, Response, params, status
 from fastapi.responses import RedirectResponse
 from google.auth.exceptions import GoogleAuthError
 from oauthlib.oauth2.rfc6749.errors import OAuth2Error
@@ -44,7 +44,7 @@ auth_rate_limit = RateLimiter(
     window_seconds=60,
     scope="auth",
 )
-RateLimited = Depends(auth_rate_limit)
+RateLimited = params.Depends(dependency=auth_rate_limit)
 
 
 @router.post(

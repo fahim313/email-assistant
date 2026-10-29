@@ -2,19 +2,21 @@ import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any
 
 from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
-from sqlalchemy import text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.exceptions.error import ReconnectRequiredError
 from app.db.session import SessionLocal
 from app.integrations import gmail_client as gmail
+from app.integrations.gmail_client import EmailUpsertData, GmailService
 from app.modules.accounts import service as accounts_service
 from app.modules.accounts.models import ConnectedAccount
+from app.modules.emails import repository as emails_repository
+from app.modules.emails.models import Email
 from app.modules.sync import repository
 from app.modules.sync.models import SyncRun
 from app.modules.sync.schemas import SyncStatusResponse, SyncStepStatus
@@ -29,7 +31,7 @@ STEPS: list[tuple[str, str]] = [
     ("threads", "Grouping conversations"),
     ("done", "Finished"),
 ]
-_STEP_INDEX = {key: i for i, (key, _) in enumerate(STEPS)}
+_STEP_INDEX = {key: index for index, (key, _) in enumerate(STEPS)}
 
 FETCH_RETRIES = 4
 RETRY_WAITS_SECONDS = (60, 120, 240)
@@ -37,6 +39,11 @@ NON_QUOTA_MAX_WAIT_SECONDS = 15
 
 MAX_BATCH_SIZE = 20
 BATCH_PAUSE_SECONDS = 2.0
+
+
+def _msg(*sentences: str) -> str:
+    """Join sentences into one user-facing message."""
+    return " ".join(sentences)
 
 
 def build_status(account: ConnectedAccount) -> SyncStatusResponse:
@@ -107,45 +114,36 @@ async def request_sync(
 
 def _friendly_error(exc: Exception) -> str:
     if isinstance(exc, (RefreshError, ReconnectRequiredError)):
-        return (
-            "Google access expired or was revoked. "
-            "Please reconnect this Gmail account."
+        return _msg(
+            "Google access expired or was revoked.",
+            "Please reconnect this Gmail account.",
         )
 
     if isinstance(exc, HttpError):
-        status_code = getattr(exc.resp, "status", None)
-        error_text = str(exc).lower()
+        status_code = gmail.http_status(exc)
 
         if status_code == 401:
-            return (
-                "Gmail access expired or was revoked. "
-                "Please reconnect this Gmail account."
+            return _msg(
+                "Gmail access expired or was revoked.",
+                "Please reconnect this Gmail account.",
             )
 
         if status_code == 403:
-            if any(
-                marker in error_text
-                for marker in (
-                    "quota",
-                    "ratelimitexceeded",
-                    "rate limit",
-                    "user rate limit",
-                )
-            ):
-                return (
-                    "Gmail API quota exceeded. "
-                    "Please wait before trying the sync again."
+            if gmail.is_quota_error(exc):
+                return _msg(
+                    "Gmail API quota exceeded.",
+                    "Please wait before trying the sync again.",
                 )
 
-            return (
-                "Gmail refused access (403). Check Gmail API "
-                "permissions and access settings."
+            return _msg(
+                "Gmail refused access (403).",
+                "Check Gmail API permissions and access settings.",
             )
 
         if status_code == 429:
-            return (
-                "Gmail is limiting requests right now. "
-                "Please wait before trying again."
+            return _msg(
+                "Gmail is limiting requests right now.",
+                "Please wait before trying again.",
             )
 
         return f"Gmail API error ({status_code})."
@@ -175,21 +173,22 @@ async def _existing_messages(
 ) -> dict[str, str]:
     """Map Gmail message IDs to stored Gmail thread IDs."""
     result = await session.execute(
-        text(
-            "SELECT gmail_message_id, thread_id FROM emails "
-            "WHERE account_id = :account_id"
-        ),
-        {"account_id": account_id},
+        select(Email.gmail_message_id, Email.thread_id).where(
+            Email.account_id == account_id
+        )
     )
-    return {row[0]: row[1] for row in result.all()}
+    return {
+        message_id: thread_id
+        for message_id, thread_id in result.all()
+    }
 
 
 async def _fetch_with_retry(
-    service: Any,
+    service: GmailService,
     ids: list[str],
-) -> tuple[list[dict[str, Any]], list[str]]:
+) -> tuple[list[EmailUpsertData], list[str]]:
     """Fetch messages and retry failed IDs."""
-    messages: list[dict[str, Any]] = []
+    messages: list[EmailUpsertData] = []
     gone: list[str] = []
     pending = ids
 
@@ -201,25 +200,11 @@ async def _fetch_with_retry(
                 pending,
             )
         except HttpError as exc:
-            status = getattr(exc.resp, "status", None)
-
-            if status == 404:
+            if gmail.http_status(exc) == 404:
                 gone.extend(pending)
                 return messages, gone
 
-            quota_limited = status == 429 or (
-                status == 403
-                and any(
-                    marker in str(exc).lower()
-                    for marker in (
-                        "quota",
-                        "ratelimitexceeded",
-                        "rate limit",
-                        "user rate limit",
-                    )
-                )
-            )
-
+            quota_limited = gmail.is_quota_error(exc)
             retry = pending
             got = []
             missing = []
@@ -240,8 +225,7 @@ async def _fetch_with_retry(
             wait = min(wait, NON_QUOTA_MAX_WAIT_SECONDS)
 
         logger.warning(
-            "Retrying %d Gmail messages in %ds "
-            "(attempt %d/%d, quota_limited=%s)",
+            "Retrying %d Gmail messages in %ds (attempt %d/%d, quota=%s)",
             len(pending),
             wait,
             attempt + 1,
@@ -251,15 +235,17 @@ async def _fetch_with_retry(
         await asyncio.sleep(wait)
 
     raise ValueError(
-        "Gmail is temporarily limiting requests. "
-        "Please try syncing again in a few minutes."
+        _msg(
+            "Gmail is temporarily limiting requests.",
+            "Please try syncing again in a few minutes.",
+        )
     )
 
 
 async def _store_batch(
     session: AsyncSession,
     account: ConnectedAccount,
-    service: Any,
+    service: GmailService,
     ids: list[str],
 ) -> set[str]:
     """Fetch and persist one batch, returning affected thread IDs."""
@@ -268,7 +254,7 @@ async def _store_batch(
 
     messages, gone = await _fetch_with_retry(service, ids)
 
-    wanted = [
+    wanted: list[EmailUpsertData] = [
         message
         for message in messages
         if gmail.is_wanted(message["labels"])
@@ -281,13 +267,13 @@ async def _store_batch(
 
     touched = {message["thread_id"] for message in wanted}
 
-    touched |= await threads_repository.delete_emails(
+    touched |= await emails_repository.delete_emails(
         session,
         account.id,
         [*unwanted, *gone],
     )
 
-    await threads_repository.upsert_emails(
+    await emails_repository.upsert_emails(
         session,
         account.id,
         wanted,
@@ -299,7 +285,7 @@ async def _store_batch(
 async def _sync_full(
     session: AsyncSession,
     account: ConnectedAccount,
-    service: Any,
+    service: GmailService,
     *,
     skip_existing: bool,
 ) -> tuple[set[str], int]:
@@ -321,7 +307,11 @@ async def _sync_full(
     )
 
     inbox_set = set(inbox_ids)
-    sent_ids = [message_id for message_id in sent_ids if message_id not in inbox_set]
+    sent_ids = [
+        message_id
+        for message_id in sent_ids
+        if message_id not in inbox_set
+    ]
 
     existing = (
         await _existing_messages(session, account.id)
@@ -344,7 +334,11 @@ async def _sync_full(
     for step, ids in (("inbox", inbox_ids), ("sent", sent_ids)):
         await _set_step(session, account, step)
 
-        todo = [message_id for message_id in ids if message_id not in existing]
+        todo = [
+            message_id
+            for message_id in ids
+            if message_id not in existing
+        ]
         done += len(ids) - len(todo)
 
         account.sync_done = done
@@ -371,7 +365,7 @@ async def _sync_full(
 async def _sync_incremental(
     session: AsyncSession,
     account: ConnectedAccount,
-    service: Any,
+    service: GmailService,
     start_history_id: str,
 ) -> tuple[set[str], int]:
     batch_size = _batch_size()
@@ -387,7 +381,7 @@ async def _sync_incremental(
     account.sync_done = 0
     await _set_step(session, account, "inbox")
 
-    touched = await threads_repository.delete_emails(
+    touched = await emails_repository.delete_emails(
         session,
         account.id,
         changes.deleted,
@@ -469,7 +463,7 @@ async def _sync(
         touched,
     )
 
-    account.history_id = str(profile.get("historyId", "")) or None
+    account.history_id = profile.get("historyId")
     account.sync_status = "synced"
     account.sync_step = "done"
     account.sync_error = None

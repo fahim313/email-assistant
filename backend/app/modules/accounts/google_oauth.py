@@ -1,19 +1,17 @@
-import os
-from collections.abc import Mapping
-from typing import Any, cast
+from collections.abc import Iterable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import cast
 
 import httpx
-from google.auth.transport import requests
-from google.oauth2 import id_token
-from google_auth_oauthlib.flow import Flow
+from google.oauth2.credentials import Credentials
 
 from app.core.config import get_settings
-
-# The user can untick Gmail permissions on Google's consent screen
-# (granular consent). oauthlib would then raise a bare Warning from
-# fetch_token(); relax that so we can check the granted scopes ourselves
-# and show a proper message.
-os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
+from app.integrations.google_client import (
+    OAuthFlow,
+    create_flow,
+    verify_id_token,
+)
 
 GMAIL_SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
@@ -30,31 +28,27 @@ GOOGLE_SCOPES = [
 REVOKE_URI = "https://oauth2.googleapis.com/revoke"
 
 
+@dataclass(frozen=True)
+class GoogleTokens:
+    access_token: str
+    refresh_token: str | None
+    expires_at: datetime | None
+    scopes: list[str]
+
+
 def missing_gmail_scopes(granted: list[str]) -> list[str]:
     return [scope for scope in GMAIL_SCOPES if scope not in set(granted)]
 
 
-def create_google_flow(state: str | None = None) -> Flow:
+def create_google_flow(state: str | None = None) -> OAuthFlow:
     settings = get_settings()
 
-    client_config = {
-        "web": {
-            "client_id": settings.GOOGLE_CLIENT_ID,
-            "client_secret": settings.GOOGLE_CLIENT_SECRET.get_secret_value(),
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "redirect_uris": [settings.GOOGLE_GMAIL_REDIRECT_URI],
-        }
-    }
-
-    return Flow.from_client_config(
-        client_config,
+    return create_flow(
+        client_id=settings.GOOGLE_CLIENT_ID,
+        client_secret=settings.GOOGLE_CLIENT_SECRET.get_secret_value(),
+        redirect_uri=settings.GOOGLE_GMAIL_REDIRECT_URI,
         scopes=GOOGLE_SCOPES,
         state=state,
-        redirect_uri=settings.GOOGLE_GMAIL_REDIRECT_URI,
-        # connect and callback use separate Flow objects, so a PKCE
-        # code_verifier would be lost between them
-        autogenerate_code_verifier=False,
     )
 
 
@@ -68,29 +62,62 @@ def get_google_authorization_url(state: str) -> str:
         prompt="select_account consent",
     )
 
-    return str(authorization_url)
+    return authorization_url
 
 
-def exchange_google_code(code: str, state: str) -> Flow:
+def exchange_google_code(code: str, state: str) -> OAuthFlow:
     flow = create_google_flow(state=state)
     flow.fetch_token(code=code)
     return flow
 
 
-def get_google_user_info(flow: Flow) -> dict[str, str]:
-    raw_id_token = getattr(flow.credentials, "id_token", None)
+def extract_google_tokens(credentials: Credentials) -> GoogleTokens:
+    """Read and validate the tokens Google returned. Raises ValueError."""
+    access_token: object = getattr(credentials, "token", None)
+    raw_refresh_token: object = getattr(credentials, "refresh_token", None)
+    raw_expiry: object = getattr(credentials, "expiry", None)
+    raw_scopes: object = getattr(credentials, "scopes", None)
+
+    if not isinstance(access_token, str) or not access_token:
+        raise ValueError("Google access token is missing.")
+
+    refresh_token: str | None = None
+    if raw_refresh_token is not None:
+        if not isinstance(raw_refresh_token, str):
+            raise ValueError("Google refresh token is invalid.")
+        refresh_token = raw_refresh_token
+
+    expires_at: datetime | None = None
+    if isinstance(raw_expiry, datetime):
+        expires_at = (
+            raw_expiry
+            if raw_expiry.tzinfo is not None
+            else raw_expiry.replace(tzinfo=UTC)
+        )
+
+    scopes: list[str] = []
+    if raw_scopes is not None and not isinstance(raw_scopes, str):
+        scopes = [
+            scope
+            for scope in cast(Iterable[object], raw_scopes)
+            if isinstance(scope, str)
+        ]
+
+    return GoogleTokens(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_at=expires_at,
+        scopes=scopes,
+    )
+
+
+def get_google_user_info(flow: OAuthFlow) -> dict[str, str]:
+    raw_id_token: object = getattr(flow.credentials, "id_token", None)
 
     if not isinstance(raw_id_token, str) or not raw_id_token:
         raise ValueError("Google ID token is missing.")
 
-    user_info: Mapping[str, Any] = cast(
-        Mapping[str, Any],
-        id_token.verify_oauth2_token(
-            raw_id_token,
-            requests.Request(),
-            get_settings().GOOGLE_CLIENT_ID,
-        ),
-    )
+    user_info = verify_id_token(raw_id_token, get_settings().GOOGLE_CLIENT_ID)
 
     subject = user_info.get("sub")
     email = user_info.get("email")

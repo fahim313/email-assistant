@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
@@ -13,7 +14,7 @@ settings = get_settings()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     sync_task = asyncio.create_task(periodic_sync_loop())
     housekeeping_task = asyncio.create_task(housekeeping_loop())
 
@@ -21,7 +22,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         for task in (sync_task, housekeeping_task):
-            task.cancel()
+            _ = task.cancel()
 
         for task in (sync_task, housekeeping_task):
             with suppress(asyncio.CancelledError):

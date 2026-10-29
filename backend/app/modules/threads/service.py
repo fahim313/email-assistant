@@ -3,8 +3,9 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions.error import NotFoundError
+from app.modules.emails.models import Email
 from app.modules.threads import repository
-from app.modules.threads.models import Email, Thread
+from app.modules.threads.models import Thread
 from app.modules.threads.schemas import (
     MessageItem,
     ThreadDetail,
@@ -14,7 +15,10 @@ from app.modules.threads.schemas import (
 
 
 def _split(addresses: str | None) -> list[str]:
-    return [a.strip() for a in addresses.split(",")] if addresses else []
+    if not addresses:
+        return []
+
+    return [address.strip() for address in addresses.split(",")]
 
 
 def _thread_item(thread: Thread, account_email: str) -> ThreadItem:
@@ -70,8 +74,12 @@ async def list_threads(
         page=page,
         page_size=page_size,
     )
+
     return ThreadPage(
-        items=[_thread_item(t, email) for t, email in rows],
+        items=[
+            _thread_item(thread, account_email)
+            for thread, account_email in rows
+        ],
         total=total,
         page=page,
         page_size=page_size,
@@ -84,6 +92,7 @@ async def get_thread_detail(
     thread_id: uuid.UUID,
 ) -> ThreadDetail:
     found = await repository.get_thread(session, user_id, thread_id)
+
     if found is None:
         raise NotFoundError("thread", str(thread_id))
 
@@ -91,6 +100,17 @@ async def get_thread_detail(
     messages = await repository.list_thread_messages(session, thread)
 
     return ThreadDetail(
-        **_thread_item(thread, account_email).model_dump(),
-        messages=[_message_item(m) for m in messages],
+        id=thread.id,
+        account_id=thread.account_id,
+        account_email=account_email,
+        subject=thread.subject,
+        snippet=thread.snippet,
+        last_message_at=thread.last_message_at,
+        message_count=thread.message_count,
+        last_sender_name=thread.last_sender_name,
+        last_sender_email=thread.last_sender_email,
+        last_message_is_sent=thread.last_message_is_sent,
+        is_unread=thread.is_unread,
+        participants=list(thread.participants),
+        messages=[_message_item(message) for message in messages],
     )

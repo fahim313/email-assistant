@@ -3,7 +3,7 @@ import logging
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, cast
+from typing import Annotated
 from urllib.parse import urlencode
 
 from fastapi import (
@@ -25,6 +25,7 @@ from app.db.session import SessionDep
 from app.modules.accounts import repository, service
 from app.modules.accounts.google_oauth import (
     exchange_google_code,
+    extract_google_tokens,
     get_google_authorization_url,
     get_google_user_info,
     missing_gmail_scopes,
@@ -146,47 +147,21 @@ async def google_callback(
     try:
         flow = await asyncio.to_thread(exchange_google_code, code, state)
         google_user = await asyncio.to_thread(get_google_user_info, flow)
-        credentials = flow.credentials
-
-        access_token = getattr(credentials, "token", None)
-        refresh_token = getattr(credentials, "refresh_token", None)
-        raw_expiry = getattr(credentials, "expiry", None)
-        raw_scopes = getattr(credentials, "scopes", None)
-
-        if not isinstance(access_token, str) or not access_token:
-            raise ValueError("Google access token is missing.")
-
-        if refresh_token is not None and not isinstance(refresh_token, str):
-            raise ValueError("Google refresh token is invalid.")
-
-        expires_at: datetime | None = None
-        if isinstance(raw_expiry, datetime):
-            expires_at = raw_expiry
-            if expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=UTC)
-
-        scopes: list[str] = []
-        if isinstance(raw_scopes, (list, tuple)):
-            scopes = [
-                cast(str, scope)
-                for scope in raw_scopes
-                if isinstance(scope, str)
-            ]
-
+        tokens = extract_google_tokens(flow.credentials)
     except (ValueError, TypeError, GoogleAuthError, OAuth2Error) as exc:
         logger.warning("Google OAuth verification failed: %s", type(exc).__name__)
         return _connect_error("verification_failed")
 
     # The consent screen lets people untick individual Gmail permissions.
     # Without all three the app can't read, draft or send, so refuse.
-    if missing_gmail_scopes(scopes):
+    if missing_gmail_scopes(tokens.scopes):
         return _connect_error("missing_permissions")
 
     try:
         existing = await repository.get_by_google_sub(
             session, user_id, google_user["sub"]
         )
-        if existing is None and not refresh_token:
+        if existing is None and not tokens.refresh_token:
             # Without a refresh token the account would die within an hour.
             return _connect_error("missing_refresh_token")
 
@@ -195,10 +170,10 @@ async def google_callback(
             user_id=user_id,
             google_sub=google_user["sub"],
             email=google_user["email"].lower(),
-            access_token=access_token,
-            refresh_token=refresh_token,
-            expires_at=expires_at,
-            scopes=scopes,
+            access_token=tokens.access_token,
+            refresh_token=tokens.refresh_token,
+            expires_at=tokens.expires_at,
+            scopes=tokens.scopes,
         )
     except SQLAlchemyError:
         await session.rollback()

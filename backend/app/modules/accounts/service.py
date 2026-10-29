@@ -117,7 +117,7 @@ async def get_credentials(
         ) from None
 
     if refreshed:
-        account.access_token_encrypted = encrypt_token(str(creds.token))
+        account.access_token_encrypted = encrypt_token(gmail.credentials_token(creds))
         account.token_expires_at = gmail.credentials_expiry(creds)
         await session.commit()
 
