@@ -58,8 +58,10 @@ async def list_emails(
     )
 
     return EmailPage(
-        items=[_email_item(email, account_email, db_thread_id)
-               for email, account_email, db_thread_id in rows],
+        items=[
+            _email_item(email, account_email, db_thread_id)
+            for email, account_email, db_thread_id in rows
+        ],
         total=total,
         page=page,
         page_size=page_size,
