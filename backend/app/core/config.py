@@ -10,8 +10,7 @@ from sqlalchemy.engine import URL
 ROOT_DIR = Path(__file__).resolve().parents[3]
 
 _KEY_SNIPPET = (
-    "from cryptography.fernet import Fernet; "
-    "print(Fernet.generate_key().decode())"
+    "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 )
 
 
@@ -65,9 +64,10 @@ class Settings(BaseSettings):
     ANALYSIS_BATCH_LIMIT: int = 30
     ANALYSIS_CONCURRENCY: int = 1
     ANALYSIS_PAUSE_SECONDS: float = 5.0
+    ANALYSIS_MAX_INPUT_CHARS: int = 6000
     ANALYZE_RATE_PER_MINUTE: int = 6
     APP_TIMEZONE: str = "Asia/Dhaka"
-    ENABLE_DEBUG_ENDPOINTS: bool = False
+    ENABLE_DEBUG_ENDPOINTS: bool = False 
 
     CORS_ORIGINS: list[str]
 
