@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.modules.accounts.models import OAuthState
+from app.modules.analysis import service as analysis_service
 from app.modules.auth.service import purge_expired_tokens
 from app.modules.sync import repository as sync_repository
 from app.modules.sync.service import run_sync
@@ -73,3 +74,23 @@ async def housekeeping_loop() -> None:
         except Exception:
             logger.exception("Housekeeping iteration failed")
         await asyncio.sleep(HOUSEKEEPING_EVERY_SECONDS)
+
+
+async def analysis_loop() -> None:
+    settings = get_settings()
+    interval = settings.ANALYSIS_INTERVAL_MINUTES
+
+    if interval <= 0:
+        logger.info("Analysis loop disabled (ANALYSIS_INTERVAL_MINUTES=0)")
+        return
+
+    while True:
+        try:
+            await analysis_service.run_batch(
+                None,
+                settings.ANALYSIS_BATCH_LIMIT,
+            )
+        except Exception:
+            logger.exception("Analysis loop failed")
+
+        await asyncio.sleep(interval * 60)
