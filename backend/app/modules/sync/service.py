@@ -64,19 +64,13 @@ def build_status(account: ConnectedAccount) -> SyncStatusResponse:
             if index < current:
                 state = "done"
             elif index == current:
-                state = (
-                    "active"
-                    if account.sync_status == "syncing"
-                    else "failed"
-                )
+                state = "active" if account.sync_status == "syncing" else "failed"
             else:
                 state = "pending"
         else:
             state = "pending"
 
-        steps.append(
-            SyncStepStatus(key=key, label=label, state=state)
-        )
+        steps.append(SyncStepStatus(key=key, label=label, state=state))
 
     return SyncStatusResponse(
         account_id=account.id,
@@ -177,10 +171,7 @@ async def _existing_messages(
             Email.account_id == account_id
         )
     )
-    return {
-        message_id: thread_id
-        for message_id, thread_id in result.all()
-    }
+    return {message_id: thread_id for message_id, thread_id in result.all()}
 
 
 async def _fetch_with_retry(
@@ -255,9 +246,7 @@ async def _store_batch(
     messages, gone = await _fetch_with_retry(service, ids)
 
     wanted: list[EmailUpsertData] = [
-        message
-        for message in messages
-        if gmail.is_wanted(message["labels"])
+        message for message in messages if gmail.is_wanted(message["labels"])
     ]
     unwanted = [
         message["gmail_message_id"]
@@ -307,17 +296,9 @@ async def _sync_full(
     )
 
     inbox_set = set(inbox_ids)
-    sent_ids = [
-        message_id
-        for message_id in sent_ids
-        if message_id not in inbox_set
-    ]
+    sent_ids = [message_id for message_id in sent_ids if message_id not in inbox_set]
 
-    existing = (
-        await _existing_messages(session, account.id)
-        if skip_existing
-        else {}
-    )
+    existing = await _existing_messages(session, account.id) if skip_existing else {}
 
     touched = {
         existing[message_id]
@@ -334,11 +315,7 @@ async def _sync_full(
     for step, ids in (("inbox", inbox_ids), ("sent", sent_ids)):
         await _set_step(session, account, step)
 
-        todo = [
-            message_id
-            for message_id in ids
-            if message_id not in existing
-        ]
+        todo = [message_id for message_id in ids if message_id not in existing]
         done += len(ids) - len(todo)
 
         account.sync_done = done

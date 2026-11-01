@@ -35,9 +35,7 @@ class SyncRun(Base):
     mode: Mapped[str] = mapped_column(String(20), nullable=False)
 
     # running | success | failed
-    status: Mapped[str] = mapped_column(
-        String(20), default="running", nullable=False
-    )
+    status: Mapped[str] = mapped_column(String(20), default="running", nullable=False)
 
     messages_synced: Mapped[int] = mapped_column(
         Integer, default=0, server_default="0", nullable=False

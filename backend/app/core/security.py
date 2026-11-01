@@ -79,6 +79,4 @@ def encrypt_token(token: str) -> str:
 
 
 def decrypt_token(encrypted_token: str) -> str:
-    return _get_token_cipher().decrypt(
-        encrypted_token.encode()
-    ).decode()
+    return _get_token_cipher().decrypt(encrypted_token.encode()).decode()

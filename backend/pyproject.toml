@@ -40,3 +40,4 @@ dev = [
 pythonVersion = "3.13"
 include = ["app", "tests"]
 exclude = ["alembic/versions", "**/__pycache__", ".venv"]
+reportMissingTypeStubs = false

@@ -4,6 +4,8 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict
 
+from app.modules.analysis.schemas import AnalysisBrief
+
 
 class MessageItem(BaseModel):
     model_config: ClassVar[ConfigDict] = ConfigDict(from_attributes=True)
@@ -37,6 +39,7 @@ class ThreadItem(BaseModel):
     last_message_is_sent: bool
     is_unread: bool
     participants: list[str]
+    analysis: AnalysisBrief | None = None
 
 
 class ThreadPage(BaseModel):

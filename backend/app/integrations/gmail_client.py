@@ -213,11 +213,7 @@ def build_credentials(
 ) -> Credentials:
     settings = get_settings()
 
-    expiry = (
-        expires_at.astimezone(UTC).replace(tzinfo=None)
-        if expires_at
-        else None
-    )
+    expiry = expires_at.astimezone(UTC).replace(tzinfo=None) if expires_at else None
 
     return Credentials(
         token=access_token,
@@ -276,9 +272,7 @@ def get_profile(service: GmailService) -> GmailProfile:
 def is_wanted(labels: list[str]) -> bool:
     label_set = set(labels)
 
-    return bool(label_set & WANTED_LABELS) and not (
-        label_set & UNWANTED_LABELS
-    )
+    return bool(label_set & WANTED_LABELS) and not (label_set & UNWANTED_LABELS)
 
 
 def list_message_ids(
@@ -562,11 +556,7 @@ def _collect_parts(
     body_data = body.get("data") if body else None
     is_attachment = bool(payload.get("filename"))
 
-    if (
-        body_data
-        and not is_attachment
-        and mime in ("text/plain", "text/html")
-    ):
+    if body_data and not is_attachment and mime in ("text/plain", "text/html"):
         out.setdefault(mime, []).append(_decode_body(body_data))
 
     for part in payload.get("parts", []):
@@ -591,11 +581,7 @@ def _addresses(value: str | None) -> str | None:
     if not value:
         return None
 
-    emails = [
-        address.lower()
-        for _, address in getaddresses([value])
-        if address
-    ]
+    emails = [address.lower() for _, address in getaddresses([value]) if address]
 
     return ", ".join(emails) or None
 

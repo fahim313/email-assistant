@@ -5,7 +5,7 @@ from typing import Protocol, cast
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import Flow  # pyright: ignore[reportMissingTypeStubs]
+from google_auth_oauthlib.flow import Flow
 
 # The user can untick Gmail permissions on Google's consent screen
 # (granular consent). oauthlib would then raise a bare Warning from

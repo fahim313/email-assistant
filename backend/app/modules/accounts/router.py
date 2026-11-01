@@ -87,9 +87,7 @@ async def connect_google_account(
 
     try:
         # Housekeeping: forget states that were never completed.
-        _ = await session.execute(
-            delete(OAuthState).where(OAuthState.expires_at < now)
-        )
+        _ = await session.execute(delete(OAuthState).where(OAuthState.expires_at < now))
         session.add(
             OAuthState(
                 state=state,

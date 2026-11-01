@@ -82,7 +82,7 @@ async def purge_old_runs(session: AsyncSession, keep_days: int = 30) -> int:
         )
     )
     await session.commit()
-    return result.rowcount if isinstance(result, CursorResult) else 0  
+    return result.rowcount if isinstance(result, CursorResult) else 0
 
 
 async def finish_run(
