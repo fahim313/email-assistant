@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.modules.accounts.models import ConnectedAccount
+from app.modules.analysis.models import ThreadAnalysis
 from app.modules.emails.models import Email
 from app.modules.threads.models import Thread
 
@@ -67,8 +68,7 @@ def _build_thread_row(
 
         if message.to_addresses:
             addresses.extend(
-                address.strip()
-                for address in message.to_addresses.split(",")
+                address.strip() for address in message.to_addresses.split(",")
             )
 
         for address in addresses:
@@ -86,12 +86,9 @@ def _build_thread_row(
         "last_sender_name": last.sender_name,
         "last_sender_email": last.sender_email,
         "last_message_is_sent": last.is_sent,
-        "has_inbox": any(
-            "INBOX" in message.labels for message in msgs
-        ),
+        "has_inbox": any("INBOX" in message.labels for message in msgs),
         "is_unread": any(
-            not message.is_read and "INBOX" in message.labels
-            for message in msgs
+            not message.is_read and "INBOX" in message.labels for message in msgs
         ),
         "participants": participants[:MAX_PARTICIPANTS],
     }
@@ -173,11 +170,7 @@ async def rebuild_threads(
                 )
             )
 
-        gone = [
-            thread_id
-            for thread_id in chunk
-            if thread_id not in grouped
-        ]
+        gone = [thread_id for thread_id in chunk if thread_id not in grouped]
 
         if gone:
             _ = await session.execute(
@@ -204,7 +197,8 @@ async def rebuild_threads(
             set_={
                 column: getattr(stmt.excluded, column)
                 for column in rows[0]
-                if column not in (
+                if column
+                not in (
                     "id",
                     "account_id",
                     "gmail_thread_id",
@@ -216,11 +210,7 @@ async def rebuild_threads(
 
 
 def _escape_like(value: str) -> str:
-    return (
-        value.replace("\\", "\\\\")
-        .replace("%", "\\%")
-        .replace("_", "\\_")
-    )
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 async def list_threads(
@@ -230,18 +220,40 @@ async def list_threads(
     account_id: uuid.UUID | None,
     q: str | None,
     unread_only: bool,
+    priority: str | None,
+    category: str | None,
+    is_spam: bool | None,
+    needs_reply: bool | None,
+    follow_up: bool | None,
+    has_deadline: bool | None,
     page: int,
     page_size: int,
-) -> tuple[list[tuple[Thread, str]], int]:
-    conditions: list[ColumnElement[bool]] = [
-        ConnectedAccount.user_id == user_id
-    ]
+) -> tuple[list[tuple[Thread, str, ThreadAnalysis | None]], int]:
+    conditions: list[ColumnElement[bool]] = [ConnectedAccount.user_id == user_id]
 
     if account_id is not None:
         conditions.append(Thread.account_id == account_id)
 
     if unread_only:
         conditions.append(Thread.is_unread.is_(True))
+
+    if priority is not None:
+        conditions.append(ThreadAnalysis.priority == priority)
+
+    if category is not None:
+        conditions.append(ThreadAnalysis.category == category)
+
+    if is_spam is not None:
+        conditions.append(ThreadAnalysis.is_spam.is_(is_spam))
+
+    if needs_reply is not None:
+        conditions.append(ThreadAnalysis.needs_reply.is_(needs_reply))
+
+    if follow_up is not None:
+        conditions.append(ThreadAnalysis.follow_up.is_(follow_up))
+
+    if has_deadline is not None:
+        conditions.append(ThreadAnalysis.has_deadline.is_(has_deadline))
 
     if q:
         like = f"%{_escape_like(q.strip())}%"
@@ -266,14 +278,22 @@ async def list_threads(
             ConnectedAccount,
             Thread.account_id == ConnectedAccount.id,
         )
+        .outerjoin(
+            ThreadAnalysis,
+            ThreadAnalysis.thread_id == Thread.id,
+        )
         .where(*conditions)
     )
 
     result = await session.execute(
-        select(Thread, ConnectedAccount.email)
+        select(Thread, ConnectedAccount.email, ThreadAnalysis)
         .join(
             ConnectedAccount,
             Thread.account_id == ConnectedAccount.id,
+        )
+        .outerjoin(
+            ThreadAnalysis,
+            ThreadAnalysis.thread_id == Thread.id,
         )
         .where(*conditions)
         .order_by(Thread.last_message_at.desc(), Thread.id)
@@ -281,9 +301,8 @@ async def list_threads(
         .limit(page_size)
     )
 
-    items = [
-        (row[0], row[1])
-        for row in result.all()
+    items: list[tuple[Thread, str, ThreadAnalysis | None]] = [
+        (row[0], row[1], row[2]) for row in result.all()
     ]
 
     return items, total or 0
@@ -309,6 +328,17 @@ async def get_thread(
     row = result.first()
 
     return (row[0], row[1]) if row else None
+
+
+async def get_thread_analysis(
+    session: AsyncSession,
+    thread_id: uuid.UUID,
+) -> ThreadAnalysis | None:
+    result = await session.execute(
+        select(ThreadAnalysis).where(ThreadAnalysis.thread_id == thread_id)
+    )
+
+    return result.scalar_one_or_none()
 
 
 async def list_thread_messages(
