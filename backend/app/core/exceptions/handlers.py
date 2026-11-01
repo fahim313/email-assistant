@@ -74,8 +74,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=409,
             content={
-                "detail": str(exc)
-                or "This Gmail account must be reconnected.",
+                "detail": str(exc) or "This Gmail account must be reconnected.",
                 "code": "reconnect_required",
             },
         )
@@ -87,9 +86,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         return JSONResponse(
             status_code=503,
-            content={
-                "detail": "The assistant is unavailable. Try again later."
-            },
+            content={"detail": "The assistant is unavailable. Try again later."},
         )
 
     @app.exception_handler(AppError)

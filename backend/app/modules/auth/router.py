@@ -152,11 +152,7 @@ async def google_callback(
         return fail("google_cancelled")
 
     cookie_state = request.cookies.get(GOOGLE_STATE_COOKIE)
-    if (
-        not state
-        or not cookie_state
-        or not secrets.compare_digest(state, cookie_state)
-    ):
+    if not state or not cookie_state or not secrets.compare_digest(state, cookie_state):
         return fail("google_state_invalid")
 
     try:
@@ -168,7 +164,6 @@ async def google_callback(
     except AuthenticationError:
         return fail("google_failed")
     except Exception as exc:
-      
         logger.exception("Google sign-in error: %s", type(exc).__name__)
         return fail("google_failed")
 

@@ -39,7 +39,6 @@ def _user_response(user: User) -> UserResponse:
     )
 
 
-
 async def _issue_session(
     session: AsyncSession,
     user: User,
@@ -106,7 +105,6 @@ async def refresh_session(
         raise AuthenticationError("Invalid refresh token.")
 
     if row.revoked_at is not None:
-       
         grace = timedelta(seconds=settings.REFRESH_REUSE_GRACE_SECONDS)
         if now - row.revoked_at > grace:
             await _revoke_family(session, row.family_id)
@@ -215,14 +213,10 @@ async def login_with_google(
     identity: GoogleIdentity,
 ) -> TokenResponse:
     """Find, link, or create the user for a verified Google identity."""
-    user = await session.scalar(
-        select(User).where(User.google_sub == identity.sub)
-    )
+    user = await session.scalar(select(User).where(User.google_sub == identity.sub))
 
     if user is None:
-        user = await session.scalar(
-            select(User).where(User.email == identity.email)
-        )
+        user = await session.scalar(select(User).where(User.email == identity.email))
 
         if user is None:
             user = User(
@@ -236,7 +230,6 @@ async def login_with_google(
             if user.google_sub is not None and user.google_sub != identity.sub:
                 raise ConflictError("user", identity.email)
 
-            
             if user.password_hash is not None and not user.email_verified:
                 user.password_hash = None
                 await _revoke_all_for_user(session, user.id)
