@@ -64,10 +64,12 @@ class Settings(BaseSettings):
     ANALYSIS_BATCH_LIMIT: int = 30
     ANALYSIS_CONCURRENCY: int = 1
     ANALYSIS_PAUSE_SECONDS: float = 5.0
-    ANALYSIS_MAX_INPUT_CHARS: int = 6000
+    ANALYSIS_MAX_INPUT_CHARS: int = 8000
+    DRAFT_MAX_INPUT_CHARS: int = 8000
     ANALYZE_RATE_PER_MINUTE: int = 6
     APP_TIMEZONE: str = "Asia/Dhaka"
     ENABLE_DEBUG_ENDPOINTS: bool = False 
+    
 
     CORS_ORIGINS: list[str]
 
