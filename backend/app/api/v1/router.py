@@ -5,6 +5,7 @@ from app.db.session import SessionLocal
 from app.modules.accounts.router import router as accounts_router
 from app.modules.analysis.router import router as analysis_router
 from app.modules.auth.router import router as auth_router
+from app.modules.drafts.router import router as drafts_router
 from app.modules.emails.router import router as emails_router
 from app.modules.sync.router import router as sync_router
 from app.modules.threads.router import router as threads_router
@@ -17,6 +18,8 @@ api_router.include_router(sync_router)
 api_router.include_router(threads_router)
 api_router.include_router(emails_router)
 api_router.include_router(analysis_router)
+api_router.include_router(drafts_router)
+
 
 @api_router.get("/health", tags=["Health"])
 async def health_check() -> dict[str, str]:
