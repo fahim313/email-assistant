@@ -62,6 +62,15 @@ class DraftCreate(BaseModel):
     subject: str = Field(default="", max_length=998)
     body: str = Field(default="", max_length=MAX_BODY_CHARS)
 
+    @model_validator(mode="after")
+    def validate_reply_target(self) -> Self:
+        if self.reply_to_email_id is not None and self.thread_id is None:
+            raise ValueError(
+                "thread_id is required when reply_to_email_id is set"
+            )
+
+        return self
+
 
 class DraftUpdate(BaseModel):
     to: AddressList | None = None

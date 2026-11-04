@@ -34,7 +34,7 @@ async def generate_draft(
     return await service.generate_draft(session, thread, instruction)
 
 
-@router.post(
+@router.get(
     "/threads/{thread_id}/drafts",
     response_model=list[DraftDetail],
 )
@@ -44,7 +44,6 @@ async def list_thread_drafts(
     user: CurrentUser,
 ) -> list[DraftDetail]:
     return await service.list_thread_drafts(session, user.id, thread)
-
 
 @router.get("/drafts", response_model=DraftPage)
 async def list_drafts(
