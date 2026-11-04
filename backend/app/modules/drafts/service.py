@@ -408,11 +408,55 @@ async def create_draft(
     if account is None:
         raise NotFoundError("account", str(data.account_id))
 
+    thread_id: uuid.UUID | None = None
+    reply_to_email_id: uuid.UUID | None = None
+
+    if data.thread_id is not None:
+        thread = await analysis_repository.get_owned_thread(
+            session,
+            user_id,
+            data.thread_id,
+        )
+
+        if thread is None:
+            raise NotFoundError("thread", str(data.thread_id))
+
+        if thread.account_id != account.id:
+            raise HTTPException(
+                status_code=422,
+                detail="The thread does not belong to this account",
+            )
+
+        messages = await thread_repository.list_thread_messages(
+            session,
+            thread,
+        )
+
+        thread_id = thread.id
+
+        if data.reply_to_email_id is not None:
+            target = next(
+                (
+                    message
+                    for message in messages
+                    if message.id == data.reply_to_email_id
+                ),
+                None,
+            )
+
+            if target is None:
+                raise NotFoundError("email", str(data.reply_to_email_id))
+
+            reply_to_email_id = target.id
+
+        elif messages:
+            reply_to_email_id = messages[-1].id
+
     draft = await repository.create_draft(
         session,
         account_id=account.id,
-        thread_id=None,
-        reply_to_email_id=None,
+        thread_id=thread_id,
+        reply_to_email_id=reply_to_email_id,
         to=data.to,
         cc=data.cc,
         bcc=data.bcc,
