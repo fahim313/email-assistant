@@ -3,6 +3,7 @@ from app.modules.analysis.models import ActionItem, ThreadAnalysis
 from app.modules.auth.models import RefreshToken, User
 from app.modules.drafts.models import ReplyDraft, ReplyDraftVersion
 from app.modules.emails.models import Email
+from app.modules.sending.models import EmailSend
 from app.modules.sync.models import SyncRun
 from app.modules.threads.models import Thread
 
@@ -10,6 +11,7 @@ __all__ = [
     "ActionItem",
     "ConnectedAccount",
     "Email",
+    "EmailSend",
     "OAuthState",
     "RefreshToken",
     "ReplyDraft",
