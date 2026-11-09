@@ -267,6 +267,26 @@ def _build_raw(
     )
 
 
+def _ensure_valid_message(sender: str, draft: ReplyDraft) -> None:
+    try:
+        _ = _build_raw(
+            sender=sender,
+            to=list(draft.to_addresses),
+            cc=list(draft.cc_addresses),
+            bcc=list(draft.bcc_addresses),
+            subject=draft.subject,
+            body=draft.body,
+            in_reply_to=None,
+            references=None,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
+
+
 async def save_to_gmail(
     session: AsyncSession,
     draft: ReplyDraft,
@@ -289,16 +309,23 @@ async def save_to_gmail(
     gmail_draft_id = draft.gmail_draft_id
     version = draft.current_version
 
-    raw = _build_raw(
-        sender=account.email,
-        to=list(draft.to_addresses),
-        cc=list(draft.cc_addresses),
-        bcc=list(draft.bcc_addresses),
-        subject=draft.subject,
-        body=draft.body,
-        in_reply_to=in_reply_to,
-        references=references,
-    )
+    try:
+        raw = _build_raw(
+            sender=account.email,
+            to=list(draft.to_addresses),
+            cc=list(draft.cc_addresses),
+            bcc=list(draft.bcc_addresses),
+            subject=draft.subject,
+            body=draft.body,
+            in_reply_to=in_reply_to,
+            references=references,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
 
     try:
         client = await _gmail_client(session, account)
@@ -679,6 +706,7 @@ async def send_draft(
 
     _validate_draft(draft)
     _ensure_no_placeholders(draft.body)
+    _ensure_valid_message(account.email, draft)
 
     try:
         _ = await _gmail_client(session, account)
