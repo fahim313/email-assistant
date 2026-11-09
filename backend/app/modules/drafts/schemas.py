@@ -10,7 +10,11 @@ from pydantic import (
     model_validator,
 )
 
-ADDRESS_PATTERN = r"^[^@\s,<>]+@[^@\s,<>]+\.[^@\s,<>]+$"
+ADDRESS_PATTERN = (
+    r"^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*"
+    r"@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?"
+    r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+$"
+)
 MAX_BODY_CHARS = 20000
 MAX_ADDRESSES = 50
 
